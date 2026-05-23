@@ -5,6 +5,7 @@ const dotenv = require("dotenv");
 const authRoutes = require("./src/routes/authRoutes");
 const issueRoutes = require("./src/routes/issueRoutes");
 const commentRoutes = require("./src/routes/commentRoutes");
+const managerRoutes = require("./src/routes/managerRoutes");
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/issues", issueRoutes);
 app.use("/api/comments", commentRoutes);
+app.use("/api/manager", managerRoutes);
 
 const PORT = process.env.PORT || 3000;
 
