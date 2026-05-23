@@ -14,6 +14,7 @@ export default function SubmitIssueScreen({ navigation }) {
   const [location, setLocation] = useState("");
   const [imageUri, setImageUri] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
   const pickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -34,35 +35,45 @@ export default function SubmitIssueScreen({ navigation }) {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!title || !description || !category || !location) {
-      Alert.alert("Missing data", "Please fill title, description, category and location.");
-      return;
-    }
+ const handleSubmit = async () => {
+  setMessage("");
 
-    try {
-      setLoading(true);
+  if (!title || !description || !category || !location) {
+    setMessage("Please fill title, description, category and location.");
+    return;
+  }
 
-      // For now we send the local image URI as image_url.
-      // Later you can replace this with real Supabase Storage/Cloudinary upload.
-      await api.post("/issues", {
-        title,
-        description,
-        category,
-        location,
-        image_url: imageUri,
-      });
+  try {
+    setLoading(true);
 
-      Alert.alert("Success", "Issue submitted successfully.", [
-        { text: "OK", onPress: () => navigation.navigate("MyIssues") },
-      ]);
-    } catch (error) {
-      Alert.alert("Submit failed", error?.response?.data?.error || "Something went wrong.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    const response = await api.post("/issues", {
+      title: title.trim(),
+      description: description.trim(),
+      category,
+      location: location.trim(),
+      image_url: imageUri || null,
+    });
 
+    console.log("Issue submitted:", response.data);
+
+    setMessage("Issue submitted successfully. Redirecting to My Issues...");
+
+    setTitle("");
+    setDescription("");
+    setLocation("");
+    setCategory("Electrical");
+    setImageUri(null);
+
+    setTimeout(() => {
+      navigation.navigate("MyIssues");
+    }, 1000);
+  } catch (error) {
+    console.log("Submit issue error:", error?.response?.data || error.message);
+    setMessage(error?.response?.data?.error || "Submit failed. Check backend/API.");
+  } finally {
+    setLoading(false);
+  }
+};
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Input label="Issue Title" value={title} onChangeText={setTitle} placeholder="Example: Broken light" />
@@ -82,9 +93,11 @@ export default function SubmitIssueScreen({ navigation }) {
         ))}
       </View>
 
+    
       <AppButton title="Pick Issue Photo" secondary onPress={pickImage} />
       {imageUri ? <Image source={{ uri: imageUri }} style={styles.image} /> : null}
 
+   {message ? <Text style={styles.message}>{message}</Text> : null}
       <AppButton title="Submit Issue" onPress={handleSubmit} loading={loading} />
     </ScrollView>
   );
@@ -130,4 +143,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginTop: 14,
   },
+  message: {
+  marginVertical: 12,
+  fontWeight: "700",
+  color: "#2563eb",
+},
 });

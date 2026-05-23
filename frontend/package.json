@@ -16,10 +16,11 @@
     "expo-image-picker": "latest",
     "expo-secure-store": "latest",
     "react": "latest",
+    "react-dom": "^19.2.6",
     "react-native": "latest",
     "react-native-safe-area-context": "latest",
-    "react-native-screens": "latest"
+    "react-native-screens": "latest",
+    "react-native-web": "^0.21.2"
   },
-  "devDependencies": {},
   "private": true
 }

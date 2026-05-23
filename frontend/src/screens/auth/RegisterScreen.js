@@ -17,35 +17,43 @@ export default function RegisterScreen({ navigation }) {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("community_member");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
-  const handleRegister = async () => {
-    if (!fullName || !email || !password) {
-      Alert.alert("Missing data", "Please fill all fields.");
-      return;
-    }
+ const handleRegister = async () => {
+  setMessage("");
 
-    if (password.length < 6) {
-      Alert.alert("Weak password", "Password must be at least 6 characters.");
-      return;
-    }
+  if (!fullName || !email || !password) {
+    setMessage("Please fill all fields.");
+    return;
+  }
 
-    try {
-      setLoading(true);
-      await register({
-        full_name: fullName.trim(),
-        email: email.trim(),
-        password,
-        role,
-      });
-      Alert.alert("Success", "Account created. Please login.", [
-        { text: "OK", onPress: () => navigation.navigate("Login") },
-      ]);
-    } catch (error) {
-      Alert.alert("Register failed", error?.response?.data?.error || "Something went wrong.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (password.length < 6) {
+    setMessage("Password must be at least 6 characters.");
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    await register({
+      full_name: fullName.trim(),
+      email: email.trim(),
+      password,
+      role,
+    });
+
+    setMessage("Account created successfully. Redirecting to login...");
+
+    setTimeout(() => {
+      navigation.navigate("Login");
+    }, 1200);
+  } catch (error) {
+    console.log("Register error:", error?.response?.data || error.message);
+    setMessage(error?.response?.data?.error || "Register failed. Check backend/API.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
@@ -70,6 +78,7 @@ export default function RegisterScreen({ navigation }) {
             ))}
           </View>
 
+        {message ? <Text style={styles.message}>{message}</Text> : null}
           <AppButton title="Register" onPress={handleRegister} loading={loading} />
         </View>
       </ScrollView>
@@ -117,4 +126,9 @@ const styles = StyleSheet.create({
   roleTextActive: {
     color: "#fff",
   },
+  message: {
+  marginBottom: 10,
+  fontWeight: "700",
+  color: "#2563eb",
+},
 });

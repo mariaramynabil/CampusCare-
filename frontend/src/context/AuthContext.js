@@ -1,8 +1,34 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import api, { setAuthToken } from "../api/api";
 
 const AuthContext = createContext(null);
+
+const storage = {
+  getItem: async (key) => {
+    if (Platform.OS === "web") {
+      return localStorage.getItem(key);
+    }
+    return SecureStore.getItemAsync(key);
+  },
+
+  setItem: async (key, value) => {
+    if (Platform.OS === "web") {
+      localStorage.setItem(key, value);
+      return;
+    }
+    return SecureStore.setItemAsync(key, value);
+  },
+
+  deleteItem: async (key) => {
+    if (Platform.OS === "web") {
+      localStorage.removeItem(key);
+      return;
+    }
+    return SecureStore.deleteItemAsync(key);
+  },
+};
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -15,8 +41,8 @@ export function AuthProvider({ children }) {
 
   const loadSavedSession = async () => {
     try {
-      const savedToken = await SecureStore.getItemAsync("token");
-      const savedUser = await SecureStore.getItemAsync("user");
+      const savedToken = await storage.getItem("token");
+      const savedUser = await storage.getItem("user");
 
       if (savedToken && savedUser) {
         setAuthToken(savedToken);
@@ -34,8 +60,8 @@ export function AuthProvider({ children }) {
     const response = await api.post("/auth/login", { email, password });
     const { token: newToken, user: loggedUser } = response.data;
 
-    await SecureStore.setItemAsync("token", newToken);
-    await SecureStore.setItemAsync("user", JSON.stringify(loggedUser));
+    await storage.setItem("token", newToken);
+    await storage.setItem("user", JSON.stringify(loggedUser));
 
     setAuthToken(newToken);
     setToken(newToken);
@@ -55,20 +81,25 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try {
-      if (token) await api.post("/auth/logout");
+      if (token) {
+        await api.post("/auth/logout");
+      }
     } catch (error) {
       console.log("Logout API error:", error?.response?.data || error.message);
     }
 
-    await SecureStore.deleteItemAsync("token");
-    await SecureStore.deleteItemAsync("user");
+    await storage.deleteItem("token");
+    await storage.deleteItem("user");
+
     setAuthToken(null);
     setToken(null);
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, token, loading, login, register, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

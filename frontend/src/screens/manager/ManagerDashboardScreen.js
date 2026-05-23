@@ -1,186 +1,301 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import api from "../../api/api";
-import AppButton from "../../components/AppButton";
-import IssueCard from "../../components/IssueCard";
 import { useAuth } from "../../context/AuthContext";
 
-const statuses = ["All", "Pending", "In Progress", "Resolved", "Closed"];
+const FILTERS = [
+  { label: "All", value: "all" },
+  { label: "Pending", value: "pending" },
+  { label: "In Progress", value: "in_progress" },
+  { label: "Resolved", value: "resolved" },
+  { label: "Closed", value: "closed" },
+];
+
+const CATEGORY_NAMES = {
+  1: "Electrical",
+  2: "Plumbing",
+  3: "Cleaning",
+  4: "Furniture",
+  5: "Other",
+};
+
+const normalizeStatus = (status) => {
+  if (!status) return "pending";
+
+  return String(status)
+    .toLowerCase()
+    .replace(" ", "_");
+};
 
 export default function ManagerDashboardScreen({ navigation }) {
   const { logout } = useAuth();
-  const [issues, setIssues] = useState([]);
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
-  const loadIssues = async () => {
-    const query = statusFilter === "All" ? "" : `?status=${encodeURIComponent(statusFilter)}`;
-    const response = await api.get(`/issues${query}`);
-    setIssues(response.data);
+  const [issues, setIssues] = useState([]);
+  const [selectedFilter, setSelectedFilter] = useState("all");
+  const [loading, setLoading] = useState(false);
+
+  const fetchIssues = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get("/issues");
+      setIssues(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.log("Fetch issues error:", error?.response?.data || error.message);
+      Alert.alert("Error", "Could not load issues.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
-      loadIssues()
-        .catch((error) => Alert.alert("Error", error?.response?.data?.error || "Could not load issues."))
-        .finally(() => setLoading(false));
-    }, [statusFilter])
+      fetchIssues();
+    }, [])
   );
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadIssues().catch((error) => console.log(error?.response?.data || error.message));
-    setRefreshing(false);
-  };
+  const filteredIssues =
+    selectedFilter === "all"
+      ? issues
+      : issues.filter(
+          (issue) => normalizeStatus(issue.status) === selectedFilter
+        );
 
   const updateStatus = async (issueId, status) => {
     try {
       await api.put(`/issues/${issueId}/status`, { status });
-      await loadIssues();
+      await fetchIssues();
     } catch (error) {
-      Alert.alert("Error", error?.response?.data?.error || "Could not update status.");
+      console.log("Update status error:", error?.response?.data || error.message);
+      Alert.alert("Error", "Could not update issue status.");
     }
   };
 
   const closeIssue = async (issueId) => {
     try {
       await api.put(`/issues/${issueId}/close`);
-      await loadIssues();
+      await fetchIssues();
     } catch (error) {
-      Alert.alert("Error", error?.response?.data?.error || "Could not close issue.");
+      console.log("Close issue error:", error?.response?.data || error.message);
+      Alert.alert("Error", "Could not close issue.");
     }
   };
 
-  if (loading) {
+  const renderIssue = ({ item }) => {
+    const status = normalizeStatus(item.status);
+    const categoryName =
+      item.category ||
+      CATEGORY_NAMES[item.category_id] ||
+      "No category";
+
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
+      <View style={styles.issueCard}>
+        <View style={styles.issueHeader}>
+          <View>
+            <Text style={styles.issueTitle}>{item.title}</Text>
+            <Text style={styles.issueMeta}>{categoryName}</Text>
+            <Text style={styles.issueDate}>
+              {item.created_at
+                ? new Date(item.created_at).toLocaleDateString()
+                : "No date"}
+            </Text>
+          </View>
+
+          <View style={styles.statusBadge}>
+            <Text style={styles.statusText}>{status.replace("_", " ")}</Text>
+          </View>
+        </View>
+
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={styles.darkButton}
+            onPress={() => navigation.navigate("AssignIssue", { issue: item })}
+          >
+            <Text style={styles.buttonText}>Assign</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.darkButton}
+            onPress={() => updateStatus(item.id, "resolved")}
+          >
+            <Text style={styles.buttonText}>Resolve</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.redButton}
+            onPress={() => closeIssue(item.id)}
+          >
+            <Text style={styles.buttonText}>Close</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
-  }
+  };
 
   return (
-    <View style={styles.page}>
+    <View style={styles.container}>
+      <Text style={styles.title}>All Issues</Text>
+
       <View style={styles.filters}>
-        {statuses.map((status) => (
+        {FILTERS.map((filter) => (
           <TouchableOpacity
-            key={status}
-            style={[styles.filter, statusFilter === status && styles.filterActive]}
-            onPress={() => setStatusFilter(status)}
+            key={filter.value}
+            style={[
+              styles.filterButton,
+              selectedFilter === filter.value && styles.filterButtonActive,
+            ]}
+            onPress={() => setSelectedFilter(filter.value)}
           >
-            <Text style={[styles.filterText, statusFilter === status && styles.filterTextActive]}>{status}</Text>
+            <Text
+              style={[
+                styles.filterText,
+                selectedFilter === filter.value && styles.filterTextActive,
+              ]}
+            >
+              {filter.label}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <FlatList
-        data={issues}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={<Text style={styles.empty}>No issues found.</Text>}
-        renderItem={({ item }) => (
-          <View style={styles.cardWrap}>
-            <IssueCard issue={item} onPress={() => navigation.navigate("IssueDetails", { issueId: item.id })} />
-            <View style={styles.actions}>
-              <TouchableOpacity style={styles.smallButton} onPress={() => navigation.navigate("AssignIssue", { issueId: item.id })}>
-                <Text style={styles.smallButtonText}>Assign</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.smallButton} onPress={() => updateStatus(item.id, "Resolved")}>
-                <Text style={styles.smallButtonText}>Resolve</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.smallButtonDanger} onPress={() => closeIssue(item.id)}>
-                <Text style={styles.smallButtonText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-      />
+      {loading ? (
+        <ActivityIndicator size="large" style={{ marginTop: 40 }} />
+      ) : (
+        <FlatList
+          data={filteredIssues}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={renderIssue}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>No issues found.</Text>
+          }
+        />
+      )}
 
-      <View style={styles.logout}>
-        <AppButton title="Logout" danger onPress={logout} />
-      </View>
+      <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+        <Text style={styles.buttonText}>Logout</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  page: {
+  container: {
     flex: 1,
     backgroundColor: "#f3f4f6",
   },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+  title: {
+    fontSize: 22,
+    fontWeight: "800",
+    padding: 16,
+    backgroundColor: "#fff",
   },
   filters: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-    padding: 12,
+    padding: 14,
     backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
   },
-  filter: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "#f3f4f6",
+  filterButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: "#e5e7eb",
   },
-  filterActive: {
+  filterButtonActive: {
     backgroundColor: "#2563eb",
   },
   filterText: {
-    color: "#111827",
     fontWeight: "700",
+    color: "#111827",
   },
   filterTextActive: {
     color: "#fff",
   },
   list: {
-    padding: 16,
+    padding: 14,
     paddingBottom: 90,
   },
-  empty: {
-    textAlign: "center",
-    color: "#6b7280",
-    marginTop: 40,
+  issueCard: {
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 14,
   },
-  cardWrap: {
+  issueHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  issueTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: 6,
+  },
+  issueMeta: {
+    color: "#4b5563",
     marginBottom: 8,
+  },
+  issueDate: {
+    color: "#6b7280",
+  },
+  statusBadge: {
+    backgroundColor: "#6b7280",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    alignSelf: "flex-start",
+  },
+  statusText: {
+    color: "#fff",
+    fontWeight: "700",
+    textTransform: "capitalize",
   },
   actions: {
     flexDirection: "row",
     gap: 8,
-    marginBottom: 12,
+    marginTop: 14,
   },
-  smallButton: {
+  darkButton: {
+    flex: 1,
     backgroundColor: "#374151",
-    padding: 10,
-    borderRadius: 10,
-    flex: 1,
+    padding: 14,
+    borderRadius: 8,
     alignItems: "center",
   },
-  smallButtonDanger: {
+  redButton: {
+    flex: 1,
     backgroundColor: "#dc2626",
-    padding: 10,
-    borderRadius: 10,
-    flex: 1,
+    padding: 14,
+    borderRadius: 8,
     alignItems: "center",
   },
-  smallButtonText: {
+  logoutButton: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 14,
+    backgroundColor: "#dc2626",
+    padding: 16,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  buttonText: {
     color: "#fff",
     fontWeight: "800",
   },
-  logout: {
-    position: "absolute",
-    bottom: 12,
-    left: 16,
-    right: 16,
+  emptyText: {
+    textAlign: "center",
+    marginTop: 40,
+    color: "#6b7280",
   },
 });
